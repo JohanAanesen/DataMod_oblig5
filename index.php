@@ -21,20 +21,35 @@ $db = pdoCon();
 */
 
 $seasons = getSeasons($xpath);
-foreach ($seasons as $season){
+foreach ($seasons as $season) {
     injectSeason($db, $season);
-    injectNone($db);
+}
+injectNone($db);
+
+$clubids2 = getClubID2($xpath);
+$clubnames = getClubNames($xpath);
+$clubcity = getClubCity($xpath);
+$clubcounty = getClubCounty($xpath);
+
+for($x = 0; $x < sizeof($clubnames); $x++) {
+    injectClubs($db, $clubids2[$x], $clubnames[$x], $clubcity[$x], $clubcounty[$x]);
+}
+
+$usernames2 = getUsername2($xpath);
+$firstnames = getfirstName($xpath);
+$lastnames = getlastName($xpath);
+$dob = getDOB($xpath);
+
+for($x = 0; $x < sizeof($usernames2); $x++) {
+    injectSkier($db, $usernames2[$x], $firstnames[$x], $lastnames[$x], $dob[$x]);
+}
+
+
+foreach ($seasons as $season){
 
     $clubids = getClubID($xpath, $season);
+
     foreach ($clubids as $clubID){
-
-        $clubnames = getClubNames($xpath);
-        $clubcity = getClubCity($xpath);
-        $clubcounty = getClubCounty($xpath);
-
-        for($x = 0; $x < sizeof($clubnames); $x++) {
-            injectClubs($db, $clubID, $clubnames[$x], $clubcity[$x], $clubcounty[$x]);
-        }
 
         $usernames = getUsernames($xpath, $season, $clubID);
 
@@ -43,17 +58,8 @@ foreach ($seasons as $season){
             $totalDist = getTotalDist($xpath, $season, $username, $clubID);
 
             //injects into sql
-            injectOverview($db, $season, $clubID, $username, $clubID);
+            injectOverview($db, $season, $clubID, $username, $totalDist);
 
-        }
-
-        $usernames2 = getUsername2($xpath);
-        $firstnames = getfirstName($xpath);
-        $lastnames = getlastName($xpath);
-        $dob = getDOB($xpath);
-
-        for($x = 0; $x < sizeof($usernames2); $x++) {
-            injectClubs($db, $usernames2[x], $firstnames[$x], $lastnames[$x], $dob[$x]);
         }
     }
 }
@@ -81,6 +87,17 @@ function getClubID(DOMXPath $xpath, $season){
     return $clubids;
 }
 
+function getClubID2(DOMXPath $xpath){
+    $clubids = array();
+    $query = "//SkierLogs/Clubs/Club/@id";
+    $entries = $xpath->evaluate($query);
+
+    foreach( $entries as $entry ){
+        $clubids[] = $entry->nodeValue;
+    }
+    return $clubids;
+}
+
 function getClubNames(DOMXPath $xpath){
     $clubnames = array();
     $query = "//Clubs/Club/Name";
@@ -93,7 +110,7 @@ function getClubNames(DOMXPath $xpath){
 }
 function getClubCity(DOMXPath $xpath){
     $clubcity = array();
-    $query = "//Clubs/Club/Name";
+    $query = "//Clubs/Club/City";
     $entries = $xpath->evaluate($query);
 
     foreach( $entries as $entry ){
@@ -103,7 +120,7 @@ function getClubCity(DOMXPath $xpath){
 }
 function getClubCounty(DOMXPath $xpath){
     $clubcounty = array();
-    $query = "//Clubs/Club/Name";
+    $query = "//Clubs/Club/County";
     $entries = $xpath->evaluate($query);
 
     foreach( $entries as $entry ){
@@ -197,7 +214,7 @@ function pdoCon()
 function injectSeason($db, $season){
     try{
         //SQL Injection SAFE query method:
-        $query = "INSERT INTO overview (fallYear)  VALUES (?)";
+        $query = "INSERT INTO season (fallYear)  VALUES (?)";
         $param = array($season);
         $stmt = $db->prepare($query);
         $stmt->execute($param);
