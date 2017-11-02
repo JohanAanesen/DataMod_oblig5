@@ -5,64 +5,77 @@
  * Date: 11/2/2017
  * Time: 18:15
  */
+//DATABASE NAME:
+$dbname = "oblig5";
 
 $doc = new DOMDocument();
 $doc->load('SkierLogs.xml');
 $doc->normalize();
 $xpath = new DOMXPath($doc);
 
-$db = pdoCon();
-/*
----Clubs
----Skiers
----@seasons
----season/@What club ^
----season/club/skier/sum(distance)
-*/
+$db = pdoCon($dbname);
 
-$seasons = getSeasons($xpath);
-foreach ($seasons as $season) {
-    injectSeason($db, $season);
-}
-injectNone($db);
+$failsafe = failsafe($db);
 
-$clubids2 = getClubID2($xpath);
-$clubnames = getClubNames($xpath);
-$clubcity = getClubCity($xpath);
-$clubcounty = getClubCounty($xpath);
+/*queries need to be inserted in this order:
+ * -----------------------------------------
+ * Seasons
+ * Clubs
+ * Empty club
+ * Skiers
+ * Overview
+ */
 
-for($x = 0; $x < sizeof($clubnames); $x++) {
-    injectClubs($db, $clubids2[$x], $clubnames[$x], $clubcity[$x], $clubcounty[$x]);
-}
+//////////////////////////////MAIN(ish)//////////////////////////////
+if ($failsafe == false){
+    $seasons = getSeasons($xpath);
+    foreach ($seasons as $season) {
+        injectSeason($db, $season);
+    }
+    injectNone($db);
 
-$usernames2 = getUsername2($xpath);
-$firstnames = getfirstName($xpath);
-$lastnames = getlastName($xpath);
-$dob = getDOB($xpath);
+    $clubids2 = getClubID2($xpath);
+    $clubnames = getClubNames($xpath);
+    $clubcity = getClubCity($xpath);
+    $clubcounty = getClubCounty($xpath);
 
-for($x = 0; $x < sizeof($usernames2); $x++) {
-    injectSkier($db, $usernames2[$x], $firstnames[$x], $lastnames[$x], $dob[$x]);
-}
+    for($x = 0; $x < sizeof($clubnames); $x++) {
+        injectClubs($db, $clubids2[$x], $clubnames[$x], $clubcity[$x], $clubcounty[$x]);
+    }
 
+    $usernames2 = getUsername2($xpath);
+    $firstnames = getfirstName($xpath);
+    $lastnames = getlastName($xpath);
+    $dob = getDOB($xpath);
 
-foreach ($seasons as $season){
+    for($x = 0; $x < sizeof($usernames2); $x++) {
+        injectSkier($db, $usernames2[$x], $firstnames[$x], $lastnames[$x], $dob[$x]);
+    }
 
-    $clubids = getClubID($xpath, $season);
+    foreach ($seasons as $season){
 
-    foreach ($clubids as $clubID){
+        $clubids = getClubID($xpath, $season);
 
-        $usernames = getUsernames($xpath, $season, $clubID);
+        foreach ($clubids as $clubID){
 
-        foreach ($usernames as $username){
-           // echo "$season $clubID $username: ".getTotalDist($xpath, $season, $username, $clubID)."<br>";
-            $totalDist = getTotalDist($xpath, $season, $username, $clubID);
+            $usernames = getUsernames($xpath, $season, $clubID);
 
-            //injects into sql
-            injectOverview($db, $season, $clubID, $username, $totalDist);
+            foreach ($usernames as $username){
+               // echo "$season $clubID $username: ".getTotalDist($xpath, $season, $username, $clubID)."<br>";
+                $totalDist = getTotalDist($xpath, $season, $username, $clubID);
 
+                //injects into sql
+                injectOverview($db, $season, $clubID, $username, $totalDist);
+
+            }
         }
     }
+    echo "Database injections completed.";
+}else{
+    echo "Database must be empty!";
 }
+
+//////////////////////////////FUNCTIONS//////////////////////////////
 
 function getSeasons(DOMXPath $xpath){
     $seasons = array();
@@ -195,12 +208,12 @@ function getTotalDist(DOMXPath $xpath, $season, $username, $clubID){
 
 }
 
-
-function pdoCon()
+//////////////////////////////PDO CONNECTION//////////////////////////////
+function pdoCon($dbname)
 {
     try {
         // Create PDO connection
-        $db = new PDO('mysql:host=localhost;dbname=oblig5;charset=utf8mb4', 'root', '');
+        $db = new PDO('mysql:host=localhost;dbname='.$dbname.';charset=utf8mb4', 'root', '');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         //Sets the $db to the PDO $db :)
 
@@ -210,6 +223,8 @@ function pdoCon()
 
     return $db;
 }
+
+//////////////////////////////DB-STUFF//////////////////////////////
 
 function injectSeason($db, $season){
     try{
@@ -277,6 +292,24 @@ function injectOverview($db, $season, $clubID, $username, $totalDist){
     } catch(PDOException $ex){
         echo "Fuck".$ex; //Error message
     }
+}
+
+function failsafe($db){
+    try{
+        //SQL Injection SAFE query method:
+        $query = "SELECT * FROM overview, season, skierclub, skier LIMIT 2";
+        $param = array();
+        $stmt = $db->prepare($query);
+        $stmt->execute($param);
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (sizeof($row) > 1) return true;
+
+    }catch(PDOException $ex){
+        echo "Fuck ".$ex; //Error message
+    }
+    return false;
 }
 
 
